@@ -14,8 +14,7 @@ https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/latest/#standalone-co
 
 ## Data inputs
 
-By default, shape templates are read from:
-/afs/desy.de/user/g/gmilella/public/combine_inputs
+By default, shape templates are read from `/afs/desy.de/user/g/gmilella/public/combine_inputs`
 
 ## Quick start
 
@@ -46,13 +45,17 @@ INPUT_DIR must contain the datacards from step 1 or 2
 Mass and width grids, and analysis parameters, are defined inside each script.
 
 - Impacts and pulls
+
 `python3 pulls_plot_creation.py --input_dir INPUT_DIR`
 
 - Goodness of fit
+
 `python3 goodness_of_fit_test.py --input_dir INPUT_DIR`
 
 - Limits
+
 `python3 combine_limit_calculation.py --input_dir INPUT_DIR`
 
 - Prefit and postfit distributions
+
 `python3 prefit_postfit_plot.py --input_dir INPUT_DIR`

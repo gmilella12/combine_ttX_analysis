@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import CombineHarvester.CombineTools.ch as ch
-# import CombineHarvester.VHLegacy.systematics as systs
 import ROOT
 import math
 import glob
@@ -18,8 +17,6 @@ parser.add_argument(
  '--output_dir', default='vhbb', help="""Subdirectory of ./output/ where the cards are written out to""")
 parser.add_argument(
  '--year', default='2018', help="""Year to produce datacards for (2017 or 2016)""")
-parser.add_argument(
- '--bdt_score_wp', default='0p3', help="""BDT score output working point (WP)""")
 
 args = parser.parse_args()
 
@@ -27,18 +24,19 @@ BKG_PREDICTION = True
 BKG_SCALING = False
 CONTROL_REGIONS = False
 
-NFS_PATH = os.environ.get('NFS', '/data/dust/user/gmilella')
+# NFS_PATH = os.environ.get('NFS', '/data/dust/user/gmilella')
+AFS_PATH = os.environ.get('AFS', '/afs/desy.de/user/g/gmilella/public/combine_inputs')
 
 PREDICTION_REGION = '2T'
 
-SHAPES = f'{NFS_PATH}/ttX_post_ntuplization_analysis_output/analysis_outputs/{args.year}/hotvr_variables_SRREGION{PREDICTION_REGION}/hotvr_invariant_mass_leading_subleading/'
-BKG_ESTIMATION_DIR = f'{NFS_PATH}/ttX_post_ntuplization_analysis_output/analysis_outputs/{args.year}/prediction_analysis_source_SRREGION0T_prediction_SRREGION{PREDICTION_REGION}/'
-SMOOTHING_DIR = f'{NFS_PATH}/ttX_post_ntuplization_analysis_output/analysis_outputs/{args.year}/check_systematics_variation_SRREGION{PREDICTION_REGION}/hotvr_invariant_mass_leading_subleading/'
+SIGNAL_SHAPES = f'{AFS_PATH}/{args.year}/signal_shapes/hotvr_variables_SRREGION{PREDICTION_REGION}/hotvr_invariant_mass_leading_subleading/'
+BKG_ESTIMATION_DIR = f'{AFS_PATH}/{args.year}/bkg_prediction/prediction_analysis_source_SRREGION0T_prediction_SRREGION{PREDICTION_REGION}/'
+SMOOTHING_DIR = f'{AFS_PATH}/{args.year}/smoothing/check_systematics_variation_SRREGION{PREDICTION_REGION}/hotvr_invariant_mass_leading_subleading/'
 
 if CONTROL_REGIONS:
-    SHAPES = f'{NFS_PATH}/ttX_post_ntuplization_analysis_output/analysis_outputs/{args.year}/hotvr_variables_CR2J{PREDICTION_REGION}/hotvr_invariant_mass_leading_subleading/'
-    BKG_ESTIMATION_DIR = f'{NFS_PATH}/ttX_post_ntuplization_analysis_output/analysis_outputs/{args.year}/prediction_analysis_source_CR2J0T_prediction_CR2J{PREDICTION_REGION}/'
-    SMOOTHING_DIR = f'{NFS_PATH}/ttX_post_ntuplization_analysis_output/analysis_outputs/{args.year}/check_systematics_variation_CR2J{PREDICTION_REGION}/hotvr_invariant_mass_leading_subleading/'
+    SIGNAL_SHAPES = f'{AFS_PATH}/{args.year}/signal_shapes/hotvr_variables_CR2J{PREDICTION_REGION}/hotvr_invariant_mass_leading_subleading/'
+    BKG_ESTIMATION_DIR = f'{AFS_PATH}/{args.year}/bkg_prediction/prediction_analysis_source_CR2J0T_prediction_CR2J{PREDICTION_REGION}/'
+    SMOOTHING_DIR = f'{AFS_PATH}/{args.year}/smoothing/check_systematics_variation_CR2J{PREDICTION_REGION}/hotvr_invariant_mass_leading_subleading/'
 
 def get_hist(file_name, hist_name):
     rootFile = ROOT.TFile(file_name)
@@ -283,10 +281,6 @@ if args.year == 'all_years_Run2':
 
 UNCORRELATED_SYSTEMATICS = [
     'trigger', 
-    # 'muonID', 
-    # 'muonISO',
-    # 'electronID', 
-    # 'electronPt', 
     'bTaggingBC', 
     'bTaggingLight', 
     'ak4JESTotal', 
@@ -298,6 +292,7 @@ UNCORRELATED_SYSTEMATICS = [
     'PUID'
 ]
 
+# these values are calculated in different scripts
 LOGN_OFFSET = {
     "NORM_CR_OFFSET": {
         "2T": {
@@ -391,7 +386,6 @@ bkg_list = ['prediction', 'tt_hadronic_top', 'ttX_hadronic_top', 'multitop_hadro
 for width in WIDTHS:
     for mass in MASSES:
         print(f"\nttZ', m={mass}, width={width}")
-        # if mass == '1500' and width == '20': continue
         cb = ch.CombineHarvester()
         
         # --- backgrounds
@@ -436,7 +430,7 @@ for width in WIDTHS:
                         new_bin_edges_dict[category_name] = new_bin_edges
                     # ---
 
-                    # --- NORMALIZATION AND JET FLAVOR OFFSET
+                    # --- NORMALIZATION AND JET FLAVOR OFFSETS
                     if bkg == 'prediction':
                         systematic = ch.Systematic()
                         systematic.set_name(f'norm_CR_offset_unc_{chn}_{args.year}')
@@ -471,8 +465,6 @@ for width in WIDTHS:
                         for year in years:
                             if year == '_2018' and 'L1preFiring' in systematic_name:
                                 continue
-                            # if year == '_2016' and 'JER' in systematic_name: 
-                            #     continue
 
                             systematic = ch.Systematic()
                             systematic.set_name(f'{systematic_name}{year}')
@@ -480,6 +472,7 @@ for width in WIDTHS:
                             systematic.set_type('shape')
                             systematic.set_era(args.year)
 
+                            # envelope method for MEren/env/fac
                             if systematic_name == 'QCDScale':
                                 histos_qcd = []
                                 for qcd_sys in ['MEenv', 'MEfac', "MEren"]:
@@ -497,7 +490,8 @@ for width in WIDTHS:
                                                 )
                                             histos_qcd.append(histo)
                                         else:
-                                            print(f"{qcd_sys}{variation}{year}/{chn}/{bkg} not available!")
+                                            # print(f"{qcd_sys}{variation}{year}/{chn}/{bkg} not available!")
+                                            continue
                                 
                                 if len(histos_qcd) == 0:
                                     continue
@@ -509,17 +503,12 @@ for width in WIDTHS:
                                     nominal = bkg_hist_nominal.GetBinContent(ibin)
                                     if nominal == 0:
                                         # Handle zero-nominal case safely
-                                        # print(f'zero nominal {nominal} {[h.GetBinContent(ibin) for h in histos_qcd]}')
-
                                         bin_values = [h.GetBinContent(ibin) for h in histos_qcd if h != -1]
                                         if len(bin_values) == 0:
                                             continue
                                         bkg_hist_up.SetBinContent(ibin, max(bin_values))
                                         bkg_hist_down.SetBinContent(ibin, min(bin_values))
                                     else:
-                                        # print(f'non-zero nominal {nominal} {[h.GetBinContent(ibin) - nominal for h in histos_qcd]}')
-                                        # print([h.GetBinContent(ibin) for h in histos_qcd], [h.GetName() for h in histos_qcd])
-                                        # print(bkg_hist_nominal.GetNbinsX(), histos_qcd[0].GetNbinsX())
                                         deviations = [h.GetBinContent(ibin) - nominal for h in histos_qcd if h != -1]
                                         if len(deviations) == 0:
                                             continue
@@ -529,6 +518,7 @@ for width in WIDTHS:
 
                                         bkg_hist_up.SetBinContent(ibin, nominal + up_deviation)
                                         bkg_hist_down.SetBinContent(ibin, nominal + down_deviation)
+                            
                             else:
                                 bkg_hist_down = get_hist(
                                     root_infile,
@@ -538,19 +528,21 @@ for width in WIDTHS:
                                     root_infile,
                                     f"{systematic_name}Up{year}/{chn}/{bkg}"
                                 )
+
+                                # FSR is taken as normalization uncertainty
                                 if systematic_name == 'FSR' and bkg == 'prediction':
                                     norm_factor = LOGN_OFFSET["NORM_FSR_BKG"][offset_mode][args.year][f'{chn}_{region}']
                                     systematic.set_type('lnN')
                                     systematic.set_value_u(norm_factor)
 
                                 if not isinstance(bkg_hist_nominal, ROOT.TH1):
-                                    raise TypeError(f"Expected TH1 object, got {type(bkg_hist_nominal)} instead.")
+                                    # raise TypeError(f"Expected TH1 object, got {type(bkg_hist_nominal)} instead.")
                                     continue
                                 if not isinstance(bkg_hist_down, ROOT.TH1):
-                                    print(f"Expected cloned TH1 object for up bin, got {type(bkg_hist_down)}")
+                                    # print(f"Expected cloned TH1 object for up bin, got {type(bkg_hist_down)}")
                                     continue
                                 if not isinstance(bkg_hist_up, ROOT.TH1):
-                                    print(f'Expected cloned TH1 object for down bin, got {type(bkg_hist_up)}')
+                                    # print(f'Expected cloned TH1 object for down bin, got {type(bkg_hist_up)}')
                                     continue
                                 if bkg_hist_down.Integral() == 0.0 or bkg_hist_up.Integral() == 0.0: #skipping empty histograms
                                     continue
@@ -559,7 +551,7 @@ for width in WIDTHS:
                                 bkg_hist_up.Scale(10)
                                 bkg_hist_down.Scale(10)
 
-                            if new_bin_edges_dict[category_name] != array('d'):
+                            if new_bin_edges_dict[category_name] != array('d'): # in case of rebinning!
                                 bkg_hist_up = bkg_hist_up.Rebin(
                                     len(new_bin_edges_dict[category_name]) - 1, 
                                     bkg_hist_up.GetName(),
@@ -574,10 +566,14 @@ for width in WIDTHS:
                                 bkg_hist_up = utils.bin_exclusion(bkg_hist_up)
                                 kg_hist_down = utils.bin_exclusion(bkg_hist_down)
 
-
+                            # switching up/down variation in case they are swapped
                             if bkg_hist_up.Integral() < bkg_hist_down.Integral(): 
-                                print(f"\nSystematic: {systematic_name} -> integral up: {bkg_hist_up.Integral()}, down: {bkg_hist_down.Integral()}")
+                                print(
+                                    f"\nSystematic: {systematic_name} -> "
+                                    f"integral up: {bkg_hist_up.Integral()}, down: {bkg_hist_down.Integral()}"
+                                )
                                 print("Switching up/down uncertainties!!!")
+                                
                                 systematic.set_shapes(
                                     bkg_hist_down,
                                     bkg_hist_up,
@@ -585,6 +581,7 @@ for width in WIDTHS:
                                 )
                                 if bkg_hist_up.Integral() > bkg_hist_nominal.Integral() or bkg_hist_nominal.Integral() > bkg_hist_down.Integral():
                                     print(f'WARNING!! integral nominal: {bkg_hist_nominal.Integral()} outside up/down variation!!')
+                            
                             else:
                                 systematic.set_shapes(
                                     bkg_hist_up,
@@ -603,34 +600,7 @@ for width in WIDTHS:
                     process.set_shape(bkg_hist_nominal, True)
                     cb.InsertProcess(process)
 
-                # num_bins = bkg_hist_nominal.GetNbinsX()
-                # for ibin in range(1, num_bins + 1):
-                #     bkg_hist_up_per_bin = bkg_hist_nominal.Clone(f"{bkg_hist_nominal.GetName}_up_bin{ibin}")
-                #     bkg_hist_up_per_bin.SetBinContent(ibin, bkg_hist_up.GetBinContent(ibin))
-
-                #     bkg_hist_down_per_bin = bkg_hist_nominal.Clone(f"{bkg_hist_nominal.GetName}_down_bin{ibin}")
-                #     bkg_hist_down_per_bin.SetBinContent(ibin, bkg_hist_down.GetBinContent(ibin))
-
-                #     if not isinstance(bkg_hist_up_per_bin, ROOT.TH1):
-                #         raise TypeError(f"Expected cloned TH1 object for up bin, got {type(bkg_hist_up_per_bin)}")
-                #     if not isinstance(bkg_hist_down_per_bin, ROOT.TH1):
-                #         raise TypeError(f"Expected cloned TH1 object for down bin, got {type(bkg_hist_down_per_bin)}")
-
-                #     systematic = ch.Systematic()
-                #     # systematic.set_name(f'eff_bin{ibin}_{args.year}') #_{region}')
-                #     systematic.set_name(f'TF_unc_bin{ibin}_{args.year}')
-                #     systematic.set_bin(category_name)
-                #     systematic.set_type('shape')
-                #     systematic.set_era(args.year)
-                #     systematic.set_shapes(
-                #         bkg_hist_up_per_bin,
-                #         bkg_hist_down_per_bin,
-                #         bkg_hist_nominal
-                #     )
-                #     systematic.set_process("dd_bkg")
-
-                #     cb.InsertSystematic(systematic)
-
+                # cross section uncertainties
                 if bkg != 'prediction':
                     systematic = ch.Systematic()
                     systematic.set_name(f'xsec_unc_{bkg}')
@@ -653,18 +623,15 @@ for width in WIDTHS:
         #             ((LUMI_UNC[year]))
         #         )
 
-        # --- observation (if BLINDED -> constructing Asymov data using prediction)
+        # --- observation (if BLINDED -> constructing Asimov data using prediction)
         for ichn, chn in enumerate(CHANNELS): 
             for ireg, region in enumerate(REGIONS):
                 category_name = chn+'_'+region
-                # print(f"Region: {category_name}")
 
                 root_infile = f'{BKG_ESTIMATION_DIR}/distributions_hadronic_t_removed.root'
                 root_infile = root_infile.replace("REGION", region)
 
                 obs = ch.Observation()
-                # histo_name = f"nominal/{chn}/data" # observed data (if blinded -> prediction)!
-                # if CONTROL_REGIONS:
                 histo_name = f"nominal/{chn}/data_prediction_region"
                 obs_hist = get_hist(
                     root_infile,
@@ -674,7 +641,6 @@ for width in WIDTHS:
                     print(f"{histo_name} does not exist in {root_infile}")
                     sys.exit()
 
-                # obs_hist, new_bin_edges = utils.auto_rebin(obs_hist)
                 if new_bin_edges_dict[category_name]:
                     obs_hist = obs_hist.Rebin(
                         len(new_bin_edges_dict[category_name] ) - 1, 
@@ -709,11 +675,11 @@ for width in WIDTHS:
                 process.set_bin(category_name)
                 process.set_era(args.year)
 
-                root_infile = f'{SHAPES}/distributions.root'
+                root_infile = f'{SIGNAL_SHAPES}/distributions.root'
                 if IS_BSM_TTA:
-                    root_infile = f'{SHAPES}/distributions_tta.root'
+                    root_infile = f'{SIGNAL_SHAPES}/distributions_tta.root'
                 if IS_BSM_TTH:
-                    root_infile = f'{SHAPES}/distributions_tth.root'
+                    root_infile = f'{SIGNAL_SHAPES}/distributions_tth.root'
 
                 root_infile = root_infile.replace("REGION", region)
 
@@ -722,7 +688,8 @@ for width in WIDTHS:
                         f"nominal/{chn}/{sgn_procs[0]}_hotvr_invariant_mass_leading_subleading"
                 )
                 if not isinstance(bkg_hist_nominal, ROOT.TH1):
-                    raise TypeError(f"Expected TH1 object, got {type(bkg_hist_nominal)} instead.")
+                    # raise TypeError(f"Expected TH1 object, got {type(bkg_hist_nominal)} instead.")
+                    continue
 
                 # signal histogram to be rebinned accordingly to the background bins
                 if new_bin_edges_dict[category_name] != array('d'):
@@ -751,8 +718,6 @@ for width in WIDTHS:
                     for year in years:
                         if year == '_2018' and 'L1preFiring' in systematic_name:
                             continue
-                        if year == '_2016' and 'JER' in systematic_name: 
-                            continue
 
                         systematic = ch.Systematic()
                         systematic.set_name(f'{systematic_name}{year}')
@@ -760,7 +725,7 @@ for width in WIDTHS:
                         systematic.set_type('shape')
                         systematic.set_era(args.year)
 
-                        # --- choosing the max/min between 
+                        # --- envelope method for MEren/fac/env
                         if systematic_name == 'QCDScale':
                             histos_qcd = []
                             for qcd_sys in ['MEenv', 'MEfac', "MEren"]:
@@ -820,10 +785,9 @@ for width in WIDTHS:
                                 root_infile,
                                 f"{systematic_name}Up{year}/{chn}/{sgn_procs[0]}_hotvr_invariant_mass_leading_subleading"
                             )
+
+                        # normalization uncertainty for FSR (from root files)
                         if systematic_name == 'FSR':
-                            # bkg_hist_down, bkg_hist_up = smoothing_systematic(root_infile, systematic_name, chn, region, sgn_procs[0])
-                            # histos = smoothing_systematic(root_infile, systematic_name, chn, region, sgn_procs[0])
-                            # bkg_hist_down, bkg_hist_up = histos[0], histos[1]
                             norm_factor = normalization_systematic(root_infile, systematic_name, chn, region, sgn_procs[0])
                             systematic.set_type('lnN')
                             systematic.set_value_u(norm_factor)
@@ -832,11 +796,11 @@ for width in WIDTHS:
                             raise TypeError(f"Expected TH1 object, got {type(bkg_hist_nominal)} instead.")
                         if not isinstance(bkg_hist_down, ROOT.TH1):
                             # raise TypeError(f"Expected cloned TH1 object for up bin, got {type(bkg_hist_down)}")
-                            print(f"Expected cloned TH1 object for up bin, got {type(bkg_hist_down)}")
+                            # print(f"Expected cloned TH1 object for up bin, got {type(bkg_hist_down)}")
                             continue
                         if not isinstance(bkg_hist_up, ROOT.TH1):
                             # raise TypeError(f"Expected cloned TH1 object for down bin, got {type(bkg_hist_up)}")
-                            print(f'Expected cloned TH1 object for down bin, got {type(bkg_hist_up)}')
+                            # print(f'Expected cloned TH1 object for down bin, got {type(bkg_hist_up)}')
                             continue
 
                         if new_bin_edges_dict[category_name] != array('d'):
